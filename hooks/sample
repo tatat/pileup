@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Repository name is ${REPOSITORY_NAME}
-# URL is ${REPOSITORY_URL}"
+# URL is ${REPOSITORY_URL}
 # Owner is ${REPOSITORY_OWNER_NAME}
 
 cd /path/to/local/repository

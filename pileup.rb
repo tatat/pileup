@@ -6,8 +6,10 @@ require 'yaml'
 require 'json'
 
 class Pileup < Sinatra::Base
+  @@config = nil
 
   configure do
+    set :config, File.join(settings.root, 'config.yml')
     set :hooks_dir, File.join(settings.root, 'hooks')
   end
 
@@ -30,14 +32,30 @@ class Pileup < Sinatra::Base
     end
 
     def resolve(name)
-      aliases = config['aliases']
-      aliases.has_key?(name) ? aliases[name] : name
+      config['aliases'].has_key?(name) ? config['aliases'][name] : name
     end
 
-    def config
-      # 毎回読み込む
-      YAML.load_file(File.join(settings.root, 'config.yml'))
+    def build_env(payload)
+      {
+        'REPOSITORY_NAME' => payload['repository']['name'],
+        'REPOSITORY_URL' => payload['repository']['url'],
+        'REPOSITORY_OWNER_NAME' => payload['repository']['owner']['name']
+      }
+    rescue
+      {}
     end
+  end
+
+  def config
+    @@config ||= YAML.load_file(settings.config)
+  end
+
+  def config_clear_cache
+    @@config = nil
+  end
+
+  def on_complete(result, payload)
+    # なんかあれば..
   end
 
   before do
@@ -46,6 +64,8 @@ class Pileup < Sinatra::Base
 
   post '/' do
     halt 400 if params[:payload].nil?
+    
+    config_clear_cache
 
     begin
       payload = JSON.parse(params[:payload])
@@ -53,14 +73,8 @@ class Pileup < Sinatra::Base
       filename = File.join(settings.hooks_dir, resolve(repository_name))
 
       if File.exists?(filename) && File.executable?(filename)
-        env = {
-          'REPOSITORY_NAME' => payload['repository']['name'],
-          'REPOSITORY_URL' => payload['repository']['url'],
-          'REPOSITORY_OWNER_NAME' => payload['repository']['owner']['name']
-        }
-
-        exec filename, :env => env do |result|
-          # なんかあれば..
+        exec filename, :env => build_env(payload) do |result|
+          on_complete result, payload
         end
       end
 
